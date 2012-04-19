@@ -196,19 +196,8 @@ public class Jhocr2pdf implements ContentHandler, ErrorHandler {
 		// calculate the font size
 		float width = rect.getWidth() * xScaling;
 		
-		float fontSize = 1;
-		for(float i = 1, difference = Float.POSITIVE_INFINITY; i < 500; i+= .5f) {
-			float dif = width - bf.getWidthPointKerned(text, i);
-			if(dif < 0) {
-				if(-dif < difference) {					
-					fontSize = i;
-				} else {
-					fontSize = i - .25f;
-				}
-				break;
-			}
-			difference = dif;
-		}
+		float tenWidth = bf.getWidthPointKerned(text, 10);
+                float fontSize = 10 * width / tenWidth;
 		
 		canvas.setFontAndSize(bf, fontSize);
 		canvas.showTextAlignedKerned(
