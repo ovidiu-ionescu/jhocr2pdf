@@ -62,6 +62,7 @@ public class Jhocr2pdf implements ContentHandler, ErrorHandler {
 	float yScaling;
 	
 	boolean visible;
+	int siglePageOCRNum = -1;
 	
 	
 	StringBuilder text = new StringBuilder();
@@ -111,8 +112,11 @@ public class Jhocr2pdf implements ContentHandler, ErrorHandler {
 			String klass = atts.getValue("class");
 			if(null != klass && klass.equals("ocr_page")) {
 				// Load the corresponding page of the PDF file
-				String id = atts.getValue("id");
-				int pageNum = Integer.valueOf(id.split("_")[1], 10);
+				int pageNum = siglePageOCRNum;
+				if(pageNum < 0) {
+					String id = atts.getValue("id");
+					pageNum = Integer.valueOf(id.split("_")[1], 10);
+				}
 				if(visible) {
 					canvas = stamper.getOverContent(pageNum);
 				} else {
@@ -227,7 +231,11 @@ public class Jhocr2pdf implements ContentHandler, ErrorHandler {
 		}
 	}
 	
-	public void parse(String fileName) throws SAXException, IOException {
+	/**
+	 * @param pageNum page number if the OCR file corresponds to just one page, -1 for multi page
+	 */
+	public void parse(String fileName, int pageNum) throws SAXException, IOException {
+		siglePageOCRNum = pageNum;
 		XMLReader reader;
 		reader = XMLReaderFactory.createXMLReader();
 		reader.setContentHandler(this);
@@ -275,6 +283,7 @@ public class Jhocr2pdf implements ContentHandler, ErrorHandler {
 	 * flags:
 	 *   -visible :render the text above the image
          *   -font font_path  :path to the font file to use
+	 *   -hocrnameformat : string to use to construct the name of the hocr file depending on page number
          *
 	 * Usage example:
          * java -jar jhorc2pdf.jar -font /usr/share/fonts/truetype/ttf-dejavu/DejaVuSans.ttf input.pdf input.html output.pdf
@@ -291,6 +300,7 @@ public class Jhocr2pdf implements ContentHandler, ErrorHandler {
 		 */
 		boolean visible = false;
 		String fontPath = null;
+		String fileNameFormat = null;
 		List<String>paths = new ArrayList<String>();
 		
 		for(int i = 0; i < args.length; i++) {
@@ -302,6 +312,11 @@ public class Jhocr2pdf implements ContentHandler, ErrorHandler {
 				if(args[i].equals("-font")) {
 					i++;
 					fontPath = args[i];
+					continue;
+				}
+				if(args[i].equals("-hocrnameformat")) {
+					i++;
+					fileNameFormat = args[i];
 					continue;
 				}
 				System.err.println("Invalid parameter: " + args[i]);
@@ -320,7 +335,20 @@ public class Jhocr2pdf implements ContentHandler, ErrorHandler {
 		stamper.setMoreInfo(info);
 
 		Jhocr2pdf ocrStamp = new Jhocr2pdf(stamper, visible, fontPath);
-		ocrStamp.parse(paths.get(1));
+		if(null != fileNameFormat) {
+			// we iterate through all the pages looking for separate hocr files
+			for(int i = 1, maxPages = reader.getNumberOfPages() + 1; i < maxPages ; i++) { 
+				String hocrFileName = String.format(fileNameFormat, i);
+				try {
+					ocrStamp.parse(hocrFileName, i);
+				} catch (SAXException saxException) {
+					System.err.println("Error processing hocr file: " + hocrFileName);
+					throw saxException;
+				}
+			}
+		} else {
+			ocrStamp.parse(paths.get(1), -1);
+		}
 		stamper.close();
 	}
 }
